@@ -97,8 +97,13 @@ void generate_unique_filename(const char *base, const char *ext, char *out) {
 }
 
 void save_to_file(const wchar_t *content_w, const char *ext) {
-    char content_utf8[65536] = {0};
-    WideCharToMultiByte(CP_UTF8, 0, content_w, -1, content_utf8, sizeof(content_utf8), NULL, NULL);
+    int utf8_len = WideCharToMultiByte(CP_UTF8, 0, content_w, -1, NULL, 0, NULL, NULL);
+    if (utf8_len <= 0) return;
+
+    char *content_utf8 = malloc(utf8_len);
+    if (!content_utf8) return;
+
+    WideCharToMultiByte(CP_UTF8, 0, content_w, -1, content_utf8, utf8_len, NULL, NULL);
 
     char base[MAX_FILENAME] = {0};
     char filename[MAX_FILENAME] = {0};
@@ -115,7 +120,10 @@ void save_to_file(const wchar_t *content_w, const char *ext) {
     } else {
         printf("❌ Ошибка при сохранении файла.\n");
     }
+
+    free(content_utf8);
 }
+
 
 bool is_h_file(const char *text) {
     bool has_ifndef = strstr(text, "#ifndef") != NULL;
@@ -127,15 +135,13 @@ bool is_h_file(const char *text) {
 }
 
 bool is_c_file(const char *text) {
-    // Если текст определён как заголовок — сразу нет
     if (is_h_file(text)) return false;
 
-    // Сигнатуры c-файла
     return strstr(text, "int main(") ||
-           strstr(text, "#include \"") ||
            strstr(text, "return") ||
            strstr(text, "for (") ||
-           strstr(text, "while (");
+           strstr(text, "while (") ||
+           strstr(text, "#include \"") != NULL;
 }
 
 void check_clipboard_and_save(wchar_t **last_text) {
