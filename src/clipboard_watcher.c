@@ -117,16 +117,6 @@ void save_to_file(const wchar_t *content_w, const char *ext) {
     }
 }
 
-bool is_c_file(const char *text) {
-    if (is_h_file(text)) return false;  // приоритет заголовкам
-
-    return strstr(text, "int main(") || 
-           strstr(text, "#include \"") || 
-           strstr(text, "return") ||
-           strstr(text, "for (") || 
-           strstr(text, "while (");
-}
-
 bool is_h_file(const char *text) {
     bool has_ifndef = strstr(text, "#ifndef") != NULL;
     bool has_define = strstr(text, "#define") != NULL;
@@ -134,6 +124,20 @@ bool is_h_file(const char *text) {
     bool has_pragma_once = strstr(text, "#pragma once") != NULL;
     bool has_typedef_or_struct = strstr(text, "typedef ") || strstr(text, "struct ") || strstr(text, "enum ");
     return (has_ifndef && has_define && has_endif) || has_pragma_once || has_typedef_or_struct;
+}
+
+bool is_c_file(const char *text) {
+    // Приоритет: #include "..." => c-файл
+    if (strstr(text, "#include \"")) return true;
+
+    // Если нет include, то проверяем — заголовок или нет
+    if (is_h_file(text)) return false;
+
+    // Признаки c-файла
+    return strstr(text, "int main(") || 
+           strstr(text, "return") ||
+           strstr(text, "for (") || 
+           strstr(text, "while (");
 }
 
 void check_clipboard_and_save(wchar_t **last_text) {
