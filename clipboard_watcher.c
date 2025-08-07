@@ -1,8 +1,10 @@
 #include <windows.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 #define MAX_FILENAME 256
+#define CLEAR_CLIPBOARD_AFTER_SAVE 1 // Очистить буфер после обработки
 
 int file_exists(const char *filename) {
     DWORD attr = GetFileAttributesA(filename);
@@ -18,18 +20,20 @@ void generate_unique_filename(const char* base, const char* ext, char* out) {
 }
 
 int is_c_file(const char* text) {
-    return (strstr(text, "int main(") ||
-            strstr(text, "{") && strstr(text, "}") ||
-            strstr(text, "return") ||
-            strstr(text, "for (") || strstr(text, "while (") ||
-            strstr(text, "="));
+    return (
+        strstr(text, "int main(") ||
+        (strstr(text, "{") && strstr(text, "}")) ||  // реализация функций
+        strstr(text, "return") ||
+        strstr(text, "for (") || strstr(text, "while (") ||
+        strstr(text, "=")
+    );
 }
 
 int is_h_file(const char* text) {
-    return (strstr(text, "#ifndef") &&
-            strstr(text, "#define") &&
-            strstr(text, "#endif")) ||
-           strstr(text, "#pragma once");
+    return (
+        (strstr(text, "#ifndef") && strstr(text, "#define") && strstr(text, "#endif")) ||
+        strstr(text, "#pragma once")
+    );
 }
 
 void save_to_file(const char* content, const char* ext) {
@@ -40,9 +44,9 @@ void save_to_file(const char* content, const char* ext) {
     if (file) {
         fputs(content, file);
         fclose(file);
-        printf("Сохранено: %s\n", filename);
+        printf("✅ Сохранено: %s\n", filename);
     } else {
-        printf("Ошибка при сохранении файла.\n");
+        printf("❌ Ошибка при сохранении файла.\n");
     }
 }
 
@@ -67,27 +71,38 @@ void check_clipboard_and_save(char** last_text) {
         return; // Повтор, пропускаем
     }
 
+    // Копируем буфер как новый
     free(*last_text);
     *last_text = _strdup(clipboard_text);
 
-    printf("Найден новый текст в буфере обмена. Анализ...\n");
+    printf("🔍 Найден новый текст в буфере обмена. Анализ...\n");
 
     if (is_c_file(clipboard_text)) {
+        printf("📂 Распознан как: .c файл\n");
         save_to_file(clipboard_text, "c");
     } else if (is_h_file(clipboard_text)) {
+        printf("📂 Распознан как: .h файл\n");
         save_to_file(clipboard_text, "h");
     } else {
-        printf("Не удалось определить тип файла. Сохранение отменено.\n");
+        printf("⚠ Не удалось определить тип файла. Сохранение отменено.\n");
     }
 
     GlobalUnlock(hData);
     CloseClipboard();
+
+#if CLEAR_CLIPBOARD_AFTER_SAVE
+    if (OpenClipboard(NULL)) {
+        EmptyClipboard();
+        CloseClipboard();
+        printf("🧹 Буфер обмена очищен.\n");
+    }
+#endif
 }
 
 int main() {
     char* last_text = NULL;
 
-    printf("Программа запущена. Нажимайте \"Копировать\" или любом редакторе...\n");
+    printf("🚀 Программа запущена. Нажимайте \"Копировать\" в ChatGPT или любом редакторе...\n");
 
     while (1) {
         check_clipboard_and_save(&last_text);
