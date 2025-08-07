@@ -2,10 +2,10 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Отладка db.exe",
+            "name": "Отладка clipboard_watcher.exe",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/db.exe",
+            "program": "${workspaceFolder}/build/clipboard_watcher.exe",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
@@ -19,7 +19,7 @@
                     "ignoreFailures": true
                 }
             ],
-            "preLaunchTask": "Скомпилировать main.c"
+            "preLaunchTask": "Скомпилировать clipboard_watcher.c"
         }
     ]
 }
