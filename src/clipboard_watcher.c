@@ -9,7 +9,6 @@
 #include <ctype.h>
 
 #define MAX_FILENAME 256
-#define CLEAR_CLIPBOARD_AFTER_SAVE 1
 #define CONFIG_FILE "clipboard_watcher.ini"
 
 volatile LONG running = 1;
@@ -19,6 +18,8 @@ typedef struct {
     int poll_interval_ms;
     int autostart;
 } AppConfig;
+
+AppConfig config;  // Глобально, чтобы использовать везде
 
 unsigned __stdcall input_thread_func(void *arg) {
     (void)arg;
@@ -161,13 +162,13 @@ void check_clipboard_and_save(wchar_t **last_text) {
     GlobalUnlock(hData);
     CloseClipboard();
 
-#if CLEAR_CLIPBOARD_AFTER_SAVE
-    if (OpenClipboard(NULL)) {
-        EmptyClipboard();
-        CloseClipboard();
-        printf("🧹 Буфер обмена очищен.\n");
+    if (config.clear_clipboard_after_save) {
+        if (OpenClipboard(NULL)) {
+            EmptyClipboard();
+            CloseClipboard();
+            printf("🧹 Буфер обмена очищен.\n");
+        }
     }
-#endif
 }
 
 void load_config(AppConfig *config) {
@@ -200,6 +201,9 @@ int main() {
     SetConsoleOutputCP(65001);
     setlocale(LC_ALL, "Russian_Russia.65001");
 
+    load_config(&config);
+    enable_autostart_if_needed(&config);
+
     wchar_t *last_text = NULL;
 
     printf("🚀 Программа запущена.\nНажимайте \"Копировать\" в ChatGPT или редакторе...\nВведите \"stop\" и нажмите Enter для выхода.\n");
@@ -208,7 +212,7 @@ int main() {
 
     while (InterlockedCompareExchange(&running, 1, 1)) {
         check_clipboard_and_save(&last_text);
-        Sleep(2000);
+        Sleep(config.poll_interval_ms);
     }
 
     WaitForSingleObject((HANDLE)thread_handle, INFINITE);
