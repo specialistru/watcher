@@ -2,9 +2,9 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Скомпилировать main.c",
+            "label": "Скомпилировать clipboard_watcher.c",
             "type": "shell",
-            "command": "C:\\mingw\\w64devkit\\bin\\gcc.exe",
+            "command": "C:/mingw/w64devkit/bin/gcc.exe",
             "args": [
                 "-fdiagnostics-color=always",
                 "-Wall",
@@ -14,18 +14,10 @@
                 "-std=c11",
                 "-O2",
                 "-g",
-                "-D_GNU_SOURCE",
-                "-D_POSIX_C_SOURCE=200809L",
-                "-D_DEFAULT_SOURCE",
-                "-D_XOPEN_SOURCE=700",
-                "-D__USE_MINGW_ANSI_STDIO=1",
-                "-I${workspaceFolder}/include",
-                "-I${workspaceFolder}/src",
                 "-o",
-                "${workspaceFolder}/build/db.exe",
-                "${workspaceFolder}/src/main.c",
-                "${workspaceFolder}/src/*.c",
-                "-lws2_32"
+                "${workspaceFolder}/build/clipboard_watcher.exe",
+                "${workspaceFolder}/clipboard_watcher.c",
+                "-luser32"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"
