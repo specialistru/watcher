@@ -10,8 +10,15 @@
 
 #define MAX_FILENAME 256
 #define CLEAR_CLIPBOARD_AFTER_SAVE 1
+#define CONFIG_FILE "clipboard_watcher.ini"
 
 volatile LONG running = 1;
+
+typedef struct {
+    int clear_clipboard_after_save;
+    int poll_interval_ms;
+    int autostart;
+} AppConfig;
 
 unsigned __stdcall input_thread_func(void *arg) {
     (void)arg;
@@ -161,6 +168,31 @@ void check_clipboard_and_save(wchar_t **last_text) {
         printf("🧹 Буфер обмена очищен.\n");
     }
 #endif
+}
+
+void load_config(AppConfig *config) {
+    config->clear_clipboard_after_save = GetPrivateProfileIntA("General", "clear_clipboard_after_save", 1, CONFIG_FILE);
+    config->poll_interval_ms = GetPrivateProfileIntA("General", "poll_interval_ms", 2000, CONFIG_FILE);
+    config->autostart = GetPrivateProfileIntA("General", "autostart", 0, CONFIG_FILE);
+}
+
+void enable_autostart_if_needed(const AppConfig *config) {
+    if (!config->autostart) return;
+
+    char path[MAX_PATH];
+    if (!GetModuleFileNameA(NULL, path, sizeof(path))) {
+        printf("⚠ Не удалось получить путь к EXE.\n");
+        return;
+    }
+
+    HKEY hKey;
+    if (RegOpenKeyExA(HKEY_CURRENT_USER, "Software\\Microsoft\\Windows\\CurrentVersion\\Run", 0, KEY_SET_VALUE, &hKey) == ERROR_SUCCESS) {
+        RegSetValueExA(hKey, "ClipboardWatcher", 0, REG_SZ, (const BYTE *)path, (DWORD)(strlen(path) + 1));
+        RegCloseKey(hKey);
+        printf("🛠️ Автозапуск включён через реестр.\n");
+    } else {
+        printf("❌ Не удалось установить автозапуск через реестр.\n");
+    }
 }
 
 int main() {
