@@ -19,7 +19,7 @@ typedef struct {
     int autostart;
 } AppConfig;
 
-AppConfig config;  // Глобально, чтобы использовать везде
+AppConfig config;
 
 unsigned __stdcall input_thread_func(void *arg) {
     (void)arg;
@@ -49,30 +49,28 @@ void to_lowercase_and_sanitize(char *str) {
     }
 }
 
+void strip_common_suffixes(char *base) {
+    size_t len = strlen(base);
+    if (len > 2 && strcmp(&base[len - 2], "_H") == 0) {
+        base[len - 2] = '\0';
+    } else if (len > 3 && strcmp(&base[len - 3], "__H") == 0) {
+        base[len - 3] = '\0';
+    } else if (len > 8 && strcmp(&base[len - 8], "_INCLUDED") == 0) {
+        base[len - 8] = '\0';
+    }
+}
+
 void extract_filename_from_text(const char *text, const char *ext, char *out) {
     const char *start = NULL;
     char base[MAX_FILENAME] = {0};
 
     if (strcmp(ext, "h") == 0) {
-        // Ищем #ifndef и #define
         const char *ifndef = strstr(text, "#ifndef ");
         const char *define = strstr(text, "#define ");
         if (ifndef && define) {
-            // Предпочитаем #ifndef
             start = ifndef + 8;
             sscanf(start, "%255s", base);
-            // Убираем возможные суффиксы _H, __H, _INCLUDED и т.п.
-            size_t len = strlen(base);
-            while (len > 0 && (base[len - 1] == '_' || isalpha((unsigned char)base[len - 1]))) {
-                if ((len > 2 && strcmp(&base[len - 2], "_H") == 0) ||
-                    (len > 3 && strcmp(&base[len - 3], "__H") == 0) ||
-                    (len > 8 && strcmp(&base[len - 8], "_INCLUDED") == 0)) {
-                    base[len - (strcmp(&base[len - 2], "_H") == 0 ? 2 :
-                                strcmp(&base[len - 3], "__H") == 0 ? 3 : 8)] = '\0';
-                    break;
-                }
-                len--;
-            }
+            strip_common_suffixes(base);
         }
     } else if (strcmp(ext, "c") == 0) {
         start = strstr(text, "#include \"");
@@ -126,20 +124,13 @@ bool is_c_file(const char *text) {
 }
 
 bool is_h_file(const char *text) {
-    // Стандартная защита от многократного включения
     bool has_ifndef = strstr(text, "#ifndef") != NULL;
     bool has_define = strstr(text, "#define") != NULL;
     bool has_endif = strstr(text, "#endif") != NULL;
-
-    // Или директива #pragma once
     bool has_pragma_once = strstr(text, "#pragma once") != NULL;
-
-    // Минимальные признаки заголовочного файла
-    bool has_struct_or_enum = strstr(text, "typedef ") || strstr(text, "struct ") || strstr(text, "enum ");
-
-    return (has_ifndef && has_define && has_endif) || has_pragma_once || has_struct_or_enum;
+    bool has_typedef_or_struct = strstr(text, "typedef ") || strstr(text, "struct ") || strstr(text, "enum ");
+    return (has_ifndef && has_define && has_endif) || has_pragma_once || has_typedef_or_struct;
 }
-
 
 void check_clipboard_and_save(wchar_t **last_text) {
     if (!OpenClipboard(NULL)) return;
