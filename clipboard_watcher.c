@@ -4,9 +4,28 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <locale.h>
+#include <process.h>  // Для _beginthreadex
 
 #define MAX_FILENAME 256
 #define CLEAR_CLIPBOARD_AFTER_SAVE 1 // Очистить буфер после обработки
+
+volatile bool running = true; // Глобальный флаг для управления циклом
+
+unsigned __stdcall input_thread_func(void* arg) {
+    char buffer[32];
+    while (running) {
+        if (fgets(buffer, sizeof(buffer), stdin) != NULL) {
+            // Удаляем символ перевода строки
+            buffer[strcspn(buffer, "\r\n")] = 0;
+            if (strcmp(buffer, "stop") == 0) {
+                running = false;
+                printf("🛑 Получена команда остановки. Завершаем программу...\n");
+                break;
+            }
+        }
+    }
+    return 0;
+}
 
 int file_exists(const char *filename) {
     DWORD attr = GetFileAttributesA(filename);
@@ -107,13 +126,21 @@ int main() {
     setlocale(LC_ALL, "Russian_Russia.65001");
     char* last_text = NULL;
 
-    printf("🚀 Программа запущена. Нажимайте \"Копировать\" в ChatGPT или любом редакторе...\n");
+    printf("🚀 Программа запущена.\n Нажимайте \"Копировать\" в ChatGPT или любом редакторе...\n Наберите \"stop\" и нажмите Enter для выхода...\n");
 
-    while (1) {
+    // Запускаем поток для отслеживания ввода пользователя
+    uintptr_t thread_handle = _beginthreadex(NULL, 0, input_thread_func, NULL, 0, NULL);
+
+    while (running) {
         check_clipboard_and_save(&last_text);
         Sleep(2000); // Проверка каждые 2 секунды
     }
 
+    // Ждём завершения потока ввода
+    WaitForSingleObject((HANDLE)thread_handle, INFINITE);
+    CloseHandle((HANDLE)thread_handle);
+
     free(last_text);
+    printf("Программа завершена.\n");
     return 0;
 }
