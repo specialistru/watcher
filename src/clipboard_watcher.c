@@ -127,16 +127,14 @@ bool is_h_file(const char *text) {
 }
 
 bool is_c_file(const char *text) {
-    // Приоритет: #include "..." => c-файл
-    if (strstr(text, "#include \"")) return true;
-
-    // Если нет include, то проверяем — заголовок или нет
+    // Если текст определён как заголовок — сразу нет
     if (is_h_file(text)) return false;
 
-    // Признаки c-файла
-    return strstr(text, "int main(") || 
+    // Сигнатуры c-файла
+    return strstr(text, "int main(") ||
+           strstr(text, "#include \"") ||
            strstr(text, "return") ||
-           strstr(text, "for (") || 
+           strstr(text, "for (") ||
            strstr(text, "while (");
 }
 
