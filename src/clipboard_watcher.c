@@ -118,9 +118,13 @@ void save_to_file(const wchar_t *content_w, const char *ext) {
 }
 
 bool is_c_file(const char *text) {
-    return strstr(text, "int main(") || strstr(text, "return") ||
-           strstr(text, "for (") || strstr(text, "while (") ||
-           (strstr(text, "{") && strstr(text, "}"));
+    if (is_h_file(text)) return false;  // приоритет заголовкам
+
+    return strstr(text, "int main(") || 
+           strstr(text, "#include \"") || 
+           strstr(text, "return") ||
+           strstr(text, "for (") || 
+           strstr(text, "while (");
 }
 
 bool is_h_file(const char *text) {
