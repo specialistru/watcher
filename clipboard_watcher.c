@@ -14,6 +14,8 @@ volatile bool running = true; // Глобальный флаг для управ
 
 unsigned __stdcall input_thread_func(void *arg)
 {
+    (void)arg;  // подавляем предупреждение о неиспользуемом параметре
+    
     char buffer[32];
     while (running)
     {
