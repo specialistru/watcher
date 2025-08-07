@@ -54,14 +54,24 @@ void extract_filename_from_text(const char *text, const char *ext, char *out) {
     char base[MAX_FILENAME] = {0};
 
     if (strcmp(ext, "h") == 0) {
-        start = strstr(text, "#ifndef ");
-        if (!start) start = strstr(text, "#define ");
-        if (start) {
-            start += 8;
-            sscanf(start, "%[^ \n\r]", base);
+        // Ищем #ifndef и #define
+        const char *ifndef = strstr(text, "#ifndef ");
+        const char *define = strstr(text, "#define ");
+        if (ifndef && define) {
+            // Предпочитаем #ifndef
+            start = ifndef + 8;
+            sscanf(start, "%255s", base);
+            // Убираем возможные суффиксы _H, __H, _INCLUDED и т.п.
             size_t len = strlen(base);
-            if (len > 2 && strcmp(&base[len - 2], "_H") == 0) {
-                base[len - 2] = '\0';
+            while (len > 0 && (base[len - 1] == '_' || isalpha((unsigned char)base[len - 1]))) {
+                if ((len > 2 && strcmp(&base[len - 2], "_H") == 0) ||
+                    (len > 3 && strcmp(&base[len - 3], "__H") == 0) ||
+                    (len > 8 && strcmp(&base[len - 8], "_INCLUDED") == 0)) {
+                    base[len - (strcmp(&base[len - 2], "_H") == 0 ? 2 :
+                                strcmp(&base[len - 3], "__H") == 0 ? 3 : 8)] = '\0';
+                    break;
+                }
+                len--;
             }
         }
     } else if (strcmp(ext, "c") == 0) {
@@ -116,9 +126,20 @@ bool is_c_file(const char *text) {
 }
 
 bool is_h_file(const char *text) {
-    return (strstr(text, "#ifndef") && strstr(text, "#define") && strstr(text, "#endif")) ||
-           strstr(text, "#pragma once");
+    // Стандартная защита от многократного включения
+    bool has_ifndef = strstr(text, "#ifndef") != NULL;
+    bool has_define = strstr(text, "#define") != NULL;
+    bool has_endif = strstr(text, "#endif") != NULL;
+
+    // Или директива #pragma once
+    bool has_pragma_once = strstr(text, "#pragma once") != NULL;
+
+    // Минимальные признаки заголовочного файла
+    bool has_struct_or_enum = strstr(text, "typedef ") || strstr(text, "struct ") || strstr(text, "enum ");
+
+    return (has_ifndef && has_define && has_endif) || has_pragma_once || has_struct_or_enum;
 }
+
 
 void check_clipboard_and_save(wchar_t **last_text) {
     if (!OpenClipboard(NULL)) return;
