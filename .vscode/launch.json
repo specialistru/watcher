@@ -1,0 +1,25 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Отладка db.exe",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/db.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "MIMode": "gdb",
+            "miDebuggerPath": "C:/mingw/w64devkit/bin/gdb.exe",
+            "setupCommands": [
+                {
+                    "description": "Включить pretty-printing для gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "Скомпилировать main.c"
+        }
+    ]
+}

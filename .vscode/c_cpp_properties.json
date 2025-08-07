@@ -1,1 +1,38 @@
-
+{
+    "version": 4,
+    "configurations": [
+        {
+            "name": "WinByteDB",
+            "includePath": [
+                "${workspaceFolder}/include",
+                "${workspaceFolder}/src"
+            ],
+            "browse": {
+                "path": [
+                    "${workspaceFolder}/include/*.h",
+                    "${workspaceFolder}/src*.c"
+                ],
+                "limitSymbolsToIncludedHeaders": true,
+                "databaseFilename": ""
+            },
+            "defines": [
+                "_DEBUG",
+                "UNICODE"
+            ],
+            "windowsSdkVersion": "10.0.19041.0",
+            "compilerPath": "C:/mingw/w64devkit/bin/gcc.exe",
+            "cStandard": "c23",
+            "cppStandard": "c++23",
+            "intelliSenseMode": "gcc-x64",
+            "forcedInclude": [],
+            "compilerArgs": [
+                "-Wall",
+                "-Wextra",
+                "-Wpedantic",
+                "-Werror",
+                "-Wno-unused-parameter",
+                "-Wno-unused-variable"
+            ]
+        }
+    ]
+}
