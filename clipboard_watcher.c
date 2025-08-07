@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdint.h>
+#include <locale.h>
 
 #define MAX_FILENAME 256
 #define CLEAR_CLIPBOARD_AFTER_SAVE 1 // Очистить буфер после обработки
@@ -100,6 +102,9 @@ void check_clipboard_and_save(char** last_text) {
 }
 
 int main() {
+    SetConsoleCP(65001);
+    SetConsoleOutputCP(65001);
+    setlocale(LC_ALL, "Russian_Russia.65001");
     char* last_text = NULL;
 
     printf("🚀 Программа запущена. Нажимайте \"Копировать\" в ChatGPT или любом редакторе...\n");
