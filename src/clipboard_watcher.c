@@ -7,7 +7,10 @@
 #include <process.h>
 #include <stdbool.h>
 #include <ctype.h>
-#include <wchar.h> // нужно для wcscmp, _wcsdup
+#include <wchar.h>
+#include <io.h>
+#include <fcntl.h>
+#include <conio.h>
 
 #define MAX_FILENAME 256
 #define CONFIG_FILE "clipboard_watcher.ini"
@@ -27,6 +30,15 @@ AppConfig config;
 char prefix[MAX_FILENAME] = "";
 bool prefix_enabled = false;
 
+// --- Auto-increment для prefix A.B_ ---
+static int g_prefix_A = 0;
+static int g_prefix_B = 0;
+
+// текущая «база» (имя без расширения) и маска увиденных расширений:
+// bit0 = видели .h, bit1 = видели .c
+static char g_curr_base[MAX_FILENAME] = "";
+static unsigned g_curr_mask = 0;
+
 // ===== Безопасные утилиты работы со строками =====
 static size_t z_strnlen(const char *s, size_t max)
 {
@@ -37,6 +49,198 @@ static size_t z_strnlen(const char *s, size_t max)
     {
     }
     return i;
+}
+
+// Разрешаем ANSI-последовательности (цвета) в Windows 10+ консоли
+static void enable_vt_colors(void)
+{
+    HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (h == INVALID_HANDLE_VALUE)
+        return;
+    DWORD mode = 0;
+    if (!GetConsoleMode(h, &mode))
+        return;
+    mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+    SetConsoleMode(h, mode);
+}
+
+// Регистронезависимое startswith
+static int istarts_with(const char *s, const char *prefix)
+{
+    while (*s && *prefix)
+    {
+        char a = *s, b = *prefix;
+        if ('A' <= a && a <= 'Z')
+            a += 'a' - 'A';
+        if ('A' <= b && b <= 'Z')
+            b += 'a' - 'A';
+        if (a != b)
+            return 0;
+        ++s;
+        ++prefix;
+    }
+    return *prefix == '\0';
+}
+
+// Очистить хвост строки справа от курсора
+static void clear_eol(void)
+{
+    fputs("\x1b[K", stdout); // ANSI EL - clear to end of line
+}
+
+static const char *COMMANDS[] = {
+    "help",
+    "stop",
+    "prefix X.Y",
+    "prefix off",
+    "config reload",
+    "clear clipboard",
+    "status",
+};
+enum
+{
+    NCOMMANDS = sizeof(COMMANDS) / sizeof(COMMANDS[0])
+};
+
+// Найти подсказку: первая подходящая команда по префиксу (регистр не важен).
+// Возвращает полный вариант или NULL.
+static const char *find_suggestion(const char *typed)
+{
+    for (int i = 0; i < NCOMMANDS; ++i)
+    {
+        if (istarts_with(COMMANDS[i], typed))
+            return COMMANDS[i];
+    }
+    return NULL;
+}
+
+// Нарисовать строку ввода с серой подсказкой-«призраком».
+// Курсор остаётся сразу после введённого текста.
+static void render_prompt(const char *prompt, const char *buf, const char *suggestion)
+{
+    // Перейти в начало строки и вывести промпт + буфер
+    fputs("\r", stdout);
+    fputs(prompt, stdout);
+    fputs(buf, stdout);
+    clear_eol();
+
+    if (suggestion)
+    {
+        size_t bl = strlen(buf);
+        size_t sl = strlen(suggestion);
+        if (sl > bl)
+        {
+            const char *tail = suggestion + bl; // «недописанный хвост»
+            fputs("\x1b[90m", stdout);          // серый
+            fputs(tail, stdout);
+            fputs("\x1b[0m", stdout); // сброс цвета
+            // Вернуть курсор назад на длину хвоста
+            printf("\x1b[%zuD", strlen(tail));
+        }
+    }
+    fflush(stdout);
+}
+
+static void str_copy_trunc(char *dst, size_t cap, const char *src)
+{
+    if (!dst || cap == 0)
+        return;
+    if (!src)
+    {
+        dst[0] = '\0';
+        return;
+    }
+    size_t n = strlen(src);
+    if (n >= cap)
+        n = cap - 1; // оставляем место под '\0'
+    if (n)
+        memcpy(dst, src, n);
+    dst[n] = '\0';
+}
+
+static int read_command_with_suggestion(char *out, size_t cap)
+{
+    const char *PROMPT = "> ";
+    char buf[256] = {0};
+    size_t len = 0;
+
+    render_prompt(PROMPT, buf, find_suggestion(buf));
+
+    for (;;)
+    {
+        int ch = _getch();
+
+        // Enter
+        if (ch == '\r' || ch == '\n')
+        {
+            // принять подсказку, если буфер — префикс
+            const char *sugg = find_suggestion(buf);
+            if (sugg && _stricmp(sugg, buf) != 0 && istarts_with(sugg, buf))
+            {
+                str_copy_trunc(buf, sizeof(buf), sugg); // вместо strncpy(...)
+                len = strlen(buf);
+            }
+            // вывести финальную строку и перейти вниз
+            render_prompt(PROMPT, buf, NULL);
+            fputs("\n", stdout);
+            str_copy_trunc(out, cap, buf); // вместо strncpy(...)
+            return 1;
+        }
+
+        // Backspace
+        if (ch == 8 /* BS */)
+        {
+            if (len > 0)
+            {
+                buf[--len] = '\0';
+            }
+            render_prompt(PROMPT, buf, find_suggestion(buf));
+            continue;
+        }
+
+        // Tab — принять подсказку (если есть)
+        if (ch == 9 /* TAB */)
+        {
+            const char *sugg = find_suggestion(buf);
+            if (sugg && _stricmp(sugg, buf) != 0 && istarts_with(sugg, buf))
+            {
+                str_copy_trunc(buf, sizeof(buf), sugg); // вместо strncpy(...)
+                len = strlen(buf);
+            }
+            render_prompt(PROMPT, buf, find_suggestion(buf));
+            continue;
+        }
+
+        // Esc — очистить строку
+        if (ch == 27 /* ESC */)
+        {
+            buf[0] = '\0';
+            len = 0;
+            render_prompt(PROMPT, buf, find_suggestion(buf));
+            continue;
+        }
+
+        // Управляющие (стрелки и т.п.)
+        if (ch == 0 || ch == 224)
+        {
+            (void)_getch(); // съесть второй байт
+            continue;
+        }
+
+        // Печатные символы
+        if (ch >= 32 && ch < 127)
+        {
+            if (len + 1 < sizeof(buf))
+            {
+                buf[len++] = (char)ch;
+                buf[len] = '\0';
+            }
+            render_prompt(PROMPT, buf, find_suggestion(buf));
+            continue;
+        }
+
+        // Остальное — игнор
+    }
 }
 
 static void z_buf_copy(char *dst, size_t cap, const char *src)
@@ -80,7 +284,6 @@ static void z_buf_cat_char(char *dst, size_t cap, char ch)
 }
 
 // --- Вспомогательные функции ---
-
 int file_exists(const char *filename)
 {
     DWORD attr = GetFileAttributesA(filename);
@@ -117,7 +320,7 @@ void extract_filename_from_text(const char *text, const char *ext, char *out)
     const char *start = NULL;
     char base[MAX_FILENAME] = {0};
 
-    if (strcmp(ext, "h") == 0)
+    if (_stricmp(ext, "h") == 0)
     {
         const char *ifndef = strstr(text, "#ifndef ");
         const char *define = strstr(text, "#define ");
@@ -127,14 +330,26 @@ void extract_filename_from_text(const char *text, const char *ext, char *out)
             sscanf(start, "%255s", base);
             strip_common_suffixes(base);
         }
+        // если не нашли guard — не гадаем, base останется пустой
     }
-    else if (strcmp(ext, "c") == 0)
+    else if (_stricmp(ext, "c") == 0)
     {
-        start = strstr(text, "#include \"");
-        if (start)
+        // ищем локальный include "xxx"
+        const char *p = text;
+        while ((p = strstr(p, "#include")) != NULL)
         {
-            start += 10;
-            sscanf(start, "%[^\".]", base);
+            const char *q = strchr(p, '\"');
+            if (q)
+            {
+                q++;                          // после первой кавычки
+                sscanf(q, "%255[^\"]", base); // до следующей кавычки
+                // отрежем .h если есть
+                char *dot = strrchr(base, '.');
+                if (dot)
+                    *dot = '\0';
+                break;
+            }
+            p += 8; // сдвигаем поиск дальше слова include
         }
     }
 
@@ -208,6 +423,38 @@ static void build_name(char *dst, size_t cap,
     z_buf_cat(dst, cap, ext_s ? ext_s : "");
 }
 
+// Если base новая (отличается от текущей) — увеличиваем B и обновляем prefix.
+// Для .h и .c одной и той же base префикс не меняется.
+static void update_prefix_for_base(const char *base, const char *ext)
+{
+    if (!prefix_enabled || !base || !base[0])
+        return;
+
+    if (g_curr_base[0] == '\0')
+    {
+        // первая пара после установки префикса
+        z_buf_copy(g_curr_base, sizeof(g_curr_base), base);
+        g_curr_mask = 0;
+    }
+    else if (strcmp(base, g_curr_base) != 0)
+    {
+        // новая база → инкремент номера
+        g_prefix_B++;
+        snprintf(prefix, MAX_FILENAME, "%d.%d_", g_prefix_A, g_prefix_B);
+        z_buf_copy(g_curr_base, sizeof(g_curr_base), base);
+        g_curr_mask = 0;
+    }
+
+    // отмечаем, что для этой базы встретили .h или .c
+    if (ext && ext[0])
+    {
+        if (ext[0] == 'h' || ext[0] == 'H')
+            g_curr_mask |= 1u;
+        if (ext[0] == 'c' || ext[0] == 'C')
+            g_curr_mask |= 2u;
+    }
+}
+
 void generate_unique_filename(const char *base, const char *ext, char *out)
 {
     // Локальные “безопасные” копии
@@ -231,7 +478,6 @@ void generate_unique_filename(const char *base, const char *ext, char *out)
     char idx[32];
     while (file_exists(out))
     {
-        // index_suffix = "_%d" (маленький фиксированный буфер — безопасно)
         snprintf(idx, sizeof(idx), "_%d", index++);
         build_name(out, MAX_FILENAME, prefix_local, base_local, idx, ext_local);
     }
@@ -255,6 +501,10 @@ void save_to_file(const wchar_t *content_w, const char *ext)
     char base[MAX_FILENAME] = {0};
     char filename[MAX_FILENAME] = {0};
     extract_filename_from_text(content_utf8, ext, base);
+
+    // <<< ВАЖНО: обновляем префикс в зависимости от "base" и "ext"
+    update_prefix_for_base(base, ext);
+
     generate_unique_filename(base, ext, filename);
 
     FILE *file = fopen(filename, "wb");
@@ -276,14 +526,13 @@ void save_to_file(const wchar_t *content_w, const char *ext)
 
 bool is_h_file(const char *text)
 {
-    bool has_ifndef = strstr(text, "#ifndef") != NULL;
-    bool has_define = strstr(text, "#define") != NULL;
-    bool has_endif = strstr(text, "#endif") != NULL;
-    bool has_pragma_once = strstr(text, "#pragma once") != NULL;
-    bool has_typedef_or_struct = (strstr(text, "typedef ") != NULL) ||
-                                 (strstr(text, "struct ") != NULL) ||
-                                 (strstr(text, "enum ") != NULL);
-    return (has_ifndef && has_define && has_endif) || has_pragma_once || has_typedef_or_struct;
+    // header = include guard ИЛИ pragma once. Больше ничего не считаем признаком .h
+    const char *ifndef_ = strstr(text, "#ifndef");
+    const char *define_ = strstr(text, "#define");
+    const char *endif_ = strstr(text, "#endif");
+    bool has_guards = (ifndef_ && define_ && endif_);
+    bool has_pragma_once = (strstr(text, "#pragma once") != NULL);
+    return has_guards || has_pragma_once;
 }
 
 bool is_c_file(const char *text)
@@ -291,11 +540,19 @@ bool is_c_file(const char *text)
     if (is_h_file(text))
         return false;
 
-    return (strstr(text, "int main(") != NULL) ||
-           (strstr(text, "return") != NULL) ||
-           (strstr(text, "for (") != NULL) ||
-           (strstr(text, "while (") != NULL) ||
-           (strstr(text, "#include \"") != NULL);
+    // разумные признаки .c (без «typedef/struct/enum», чтобы не путать)
+    if (strstr(text, "#include \"") != NULL)
+        return true; // есть локальный инклуд "xxx.h"
+    if (strstr(text, "int main(") != NULL)
+        return true;
+    if (strstr(text, "for (") != NULL)
+        return true;
+    if (strstr(text, "while (") != NULL)
+        return true;
+    if (strstr(text, "return") != NULL)
+        return true;
+
+    return false;
 }
 
 void check_clipboard_and_save(wchar_t **last_text)
@@ -397,20 +654,71 @@ void enable_autostart_if_needed(const AppConfig *config)
 
 // --- Командная строка ---
 
-void print_help()
+// Повторить wide-символ count раз (для '─')
+static void w_repeat(wchar_t ch, int count)
 {
-    printf("\n📖 Доступные команды:\n\n");
-    printf("┌────────────────────┬──────────────────────────────────────────────────────────────┐\n");
-    printf("│ %-18s │ %-62s │\n", "Команда", "Описание");
-    printf("├────────────────────┼──────────────────────────────────────────────────────────────┤\n");
-    printf("│ %-18s │ %-62s │\n", "help", "Показать эту справку");
-    printf("│ %-18s │ %-62s │\n", "stop", "Завершить выполнение программы");
-    printf("│ %-18s │ %-62s │\n", "prefix X.Y", "Установить префикс для имени файла, например: 1.2_");
-    printf("│ %-18s │ %-62s │\n", "prefix off", "Отключить префикс");
-    printf("│ %-18s │ %-62s │\n", "config reload", "Перезагрузить конфигурацию из ini-файла");
-    printf("│ %-18s │ %-62s │\n", "clear clipboard", "Очистить буфер обмена вручную");
-    printf("│ %-18s │ %-62s │\n", "status", "Показать текущий статус (префикс, настройки, состояние)");
-    printf("└────────────────────┴──────────────────────────────────────────────────────────────┘\n\n");
+    for (int i = 0; i < count; ++i)
+        putwchar(ch);
+}
+
+// Печать одной строки таблицы с обрезкой по ширине (в символах)
+static void print_row(const wchar_t *c1, const wchar_t *c2, int col1, int col2)
+{
+    if (!c1)
+        c1 = L"";
+    if (!c2)
+        c2 = L"";
+    wprintf(L"│ %-*.*ls │ %-*.*ls │\n", col1, col1, c1, col2, col2, c2);
+}
+
+void print_help(void)
+{
+    // Ширины содержимого (в символах, без рамок)
+    const int COL1 = 18;     // "Команда"
+    const int COL2 = 62;     // "Описание"
+    const int B1 = COL1 + 2; // + по одному пробелу слева/справа внутри ячейки
+    const int B2 = COL2 + 2;
+
+    // Включаем wide-режим консоли на время печати таблицы
+    int old_mode = _setmode(_fileno(stdout), _O_U16TEXT);
+
+    wprintf(L"\nДоступные команды:\n\n");
+
+    // Верхняя граница
+    wprintf(L"┌");
+    w_repeat(L'─', B1);
+    wprintf(L"┬");
+    w_repeat(L'─', B2);
+    wprintf(L"┐\n");
+
+    // Заголовок
+    print_row(L"Команда", L"Описание", COL1, COL2);
+
+    // Разделитель заголовка
+    wprintf(L"├");
+    w_repeat(L'─', B1);
+    wprintf(L"┼");
+    w_repeat(L'─', B2);
+    wprintf(L"┤\n");
+
+    // Строки
+    print_row(L"help", L"Показать эту справку", COL1, COL2);
+    print_row(L"stop", L"Завершить выполнение программы", COL1, COL2);
+    print_row(L"prefix X.Y", L"Установить префикс для имени файла, например: 1.2_", COL1, COL2);
+    print_row(L"prefix off", L"Отключить префикс", COL1, COL2);
+    print_row(L"config reload", L"Перезагрузить конфигурацию из ini-файла", COL1, COL2);
+    print_row(L"clear clipboard", L"Очистить буфер обмена вручную", COL1, COL2);
+    print_row(L"status", L"Показать текущий статус (префикс, настройки, состояние)", COL1, COL2);
+
+    // Нижняя граница
+    wprintf(L"└");
+    w_repeat(L'─', B1);
+    wprintf(L"┴");
+    w_repeat(L'─', B2);
+    wprintf(L"┘\n\n");
+
+    // Вернём старый режим вывода (обычно _O_TEXT или _O_U8TEXT)
+    _setmode(_fileno(stdout), old_mode);
 }
 
 void print_status()
@@ -447,7 +755,13 @@ bool set_prefix(const char *arg)
     int a, b;
     if (sscanf(arg, "%d.%d", &a, &b) == 2)
     {
-        snprintf(prefix, MAX_FILENAME, "%d.%d_", a, b);
+        g_prefix_A = a;
+        g_prefix_B = b;
+
+        g_curr_base[0] = '\0';
+        g_curr_mask = 0;
+
+        snprintf(prefix, MAX_FILENAME, "%d.%d_", g_prefix_A, g_prefix_B);
         prefix_enabled = true;
         printf("⚙️ Префикс установлен: %s\n", prefix);
         return true;
@@ -459,56 +773,88 @@ bool set_prefix(const char *arg)
 unsigned __stdcall input_thread_func(void *arg)
 {
     (void)arg;
-    char buffer[128];
-    while (InterlockedCompareExchange(&running, 1, 1))
-    {
-        if (fgets(buffer, sizeof(buffer), stdin))
-        {
-            buffer[strcspn(buffer, "\r\n")] = 0;
 
-            if (strcmp(buffer, "stop") == 0)
+    // Включаем поддержку ANSI-цветов (для серого хвоста) один раз
+    enable_vt_colors();
+
+    char line[256];
+
+    for (;;)
+    {
+        // Если пришла команда остановки из другого потока — выходим
+        if (!InterlockedCompareExchange(&running, 1, 1))
+            break;
+
+        // Читаем строку с интерактивной подсказкой
+        if (!read_command_with_suggestion(line, sizeof(line)))
+        {
+            // EOF/ошибка чтения — корректно завершаем
+            InterlockedExchange(&running, 0);
+            break;
+        }
+
+        // Трим справа
+        size_t len = strlen(line);
+        while (len > 0 && (line[len - 1] == ' ' || line[len - 1] == '\t'))
+        {
+            line[--len] = '\0';
+        }
+
+        // Пропускаем ведущие пробелы
+        char *p = line;
+        while (*p == ' ' || *p == '\t')
+            ++p;
+
+        // Пустая строка — продолжаем ожидание
+        if (*p == '\0')
+            continue;
+
+        // Обработка команд (регистр не важен)
+        if (_stricmp(p, "stop") == 0)
+        {
+            InterlockedExchange(&running, 0);
+            printf("🛑 Получена команда остановки. Завершаем программу...\n");
+            break;
+        }
+        else if (_stricmp(p, "help") == 0)
+        {
+            print_help();
+        }
+        else if (_strnicmp(p, "prefix ", 7) == 0)
+        {
+            const char *arg = p + 7;
+            while (*arg == ' ' || *arg == '\t')
+                ++arg; // допускаем лишние пробелы
+            if (_stricmp(arg, "off") == 0)
             {
-                InterlockedExchange(&running, 0);
-                printf("🛑 Получена команда остановки. Завершаем программу...\n");
-                break;
-            }
-            else if (strcmp(buffer, "help") == 0)
-            {
-                print_help();
-            }
-            else if (strncmp(buffer, "prefix ", 7) == 0)
-            {
-                const char *arg = buffer + 7;
-                if (strcmp(arg, "off") == 0)
-                {
-                    prefix_enabled = false;
-                    prefix[0] = '\0';
-                    printf("⚙️ Префикс отключён.\n");
-                }
-                else
-                {
-                    set_prefix(arg);
-                }
-            }
-            else if (strcmp(buffer, "config reload") == 0)
-            {
-                load_config(&config);
-                printf("🔄 Конфигурация перезагружена из %s\n", CONFIG_FILE);
-            }
-            else if (strcmp(buffer, "clear clipboard") == 0)
-            {
-                clear_clipboard_manual();
-            }
-            else if (strcmp(buffer, "status") == 0)
-            {
-                print_status();
+                prefix_enabled = false;
+                prefix[0] = '\0';
+                printf("⚙️ Префикс отключён.\n");
             }
             else
             {
-                printf("❓ Неизвестная команда. Введите 'help' для списка команд.\n");
+                set_prefix(arg);
             }
         }
+        else if (_stricmp(p, "config reload") == 0)
+        {
+            load_config(&config);
+            printf("🔄 Конфигурация перезагружена из %s\n", CONFIG_FILE);
+        }
+        else if (_stricmp(p, "clear clipboard") == 0)
+        {
+            clear_clipboard_manual();
+        }
+        else if (_stricmp(p, "status") == 0)
+        {
+            print_status();
+        }
+        else
+        {
+            printf("❓ Неизвестная команда. Введите 'help' для списка команд.\n");
+        }
     }
+
     return 0;
 }
 
