@@ -10,6 +10,7 @@
 
 #define MAX_FILENAME 256
 #define CONFIG_FILE "clipboard_watcher.ini"
+#define MAX_PREFIX_LEN 32
 
 volatile LONG running = 1;
 
@@ -17,20 +18,64 @@ typedef struct {
     int clear_clipboard_after_save;
     int poll_interval_ms;
     int autostart;
+    char prefix[MAX_PREFIX_LEN]; // хранит префикс, либо пустую строку
 } AppConfig;
 
-AppConfig config;
+AppConfig config = {0};
 
 unsigned __stdcall input_thread_func(void *arg) {
     (void)arg;
-    char buffer[32];
+    char buffer[128];
+
     while (InterlockedCompareExchange(&running, 1, 1)) {
         if (fgets(buffer, sizeof(buffer), stdin)) {
-            buffer[strcspn(buffer, "\r\n")] = 0;
+            buffer[strcspn(buffer, "\r\n")] = 0; // Удаляем символы перевода строки
+
             if (strcmp(buffer, "stop") == 0) {
                 InterlockedExchange(&running, 0);
                 printf("🛑 Получена команда остановки. Завершаем программу...\n");
                 break;
+            } else if (strncmp(buffer, "prefix ", 7) == 0) {
+                char *arg = buffer + 7;
+                if (strcmp(arg, "off") == 0) {
+                    config.prefix[0] = '\0';
+                    printf("🔧 Префикс отключён.\n");
+                } else {
+                    // Проверяем формат: должен быть вида X.Y где X и Y - цифры или буквы, но не обязательно
+                    // Для простоты — просто копируем до MAX_PREFIX_LEN-2 и добавляем '_'
+                    size_t len = strlen(arg);
+                    if (len > 0 && len < MAX_PREFIX_LEN - 1) {
+                        // Добавим _ в конец, если его нет
+                        if (arg[len - 1] != '_') {
+                            snprintf(config.prefix, MAX_PREFIX_LEN, "%s_", arg);
+                        } else {
+                            strncpy(config.prefix, arg, MAX_PREFIX_LEN);
+                            config.prefix[MAX_PREFIX_LEN - 1] = '\0';
+                        }
+                        printf("🔧 Префикс установлен: \"%s\"\n", config.prefix);
+                    } else {
+                        printf("⚠ Некорректный префикс. Максимальная длина %d символов.\n", MAX_PREFIX_LEN - 1);
+                    }
+                }
+            } else if (strcmp(buffer, "help") == 0) {
+                printf("\n📖 Доступные команды:\n\n");
+                printf("┌────────────────────┬──────────────────────────────────────────────────────────────┐\n");
+                printf("│ %-18s │ %-64s │\n", "Команда", "Описание");
+                printf("├────────────────────┼──────────────────────────────────────────────────────────────┤\n");
+                printf("│ %-18s │ %-64s │\n", "help", "Показать эту справку");
+                printf("│ %-18s │ %-64s │\n", "stop", "Завершить выполнение программы");
+                printf("│ %-18s │ %-64s │\n", "prefix X.Y", "Установить префикс для имени файла, например: 1.2_");
+                printf("│ %-18s │ %-64s │\n", "prefix off", "Отключить префикс");
+                printf("│ %-18s │ %-64s │\n", "status", "Показать текущие настройки и префикс");
+                printf("└────────────────────┴──────────────────────────────────────────────────────────────┘\n\n");
+            } else if (strcmp(buffer, "status") == 0) {
+                printf("\n🔍 Текущий статус:\n");
+                printf("  Префикс для файлов: \"%s\"\n", config.prefix[0] ? config.prefix : "(отсутствует)");
+                printf("  Очистка буфера после сохранения: %s\n", config.clear_clipboard_after_save ? "Включена" : "Выключена");
+                printf("  Интервал опроса (мс): %d\n", config.poll_interval_ms);
+                printf("  Автозапуск: %s\n\n", config.autostart ? "Включён" : "Выключен");
+            } else {
+                printf("❓ Неизвестная команда: \"%s\". Введите 'help' для списка команд.\n", buffer);
             }
         }
     }
@@ -108,7 +153,16 @@ void save_to_file(const wchar_t *content_w, const char *ext) {
     char base[MAX_FILENAME] = {0};
     char filename[MAX_FILENAME] = {0};
     extract_filename_from_text(content_utf8, ext, base);
-    generate_unique_filename(base, ext, filename);
+
+    // Формируем имя с префиксом, если он установлен
+    char base_with_prefix[MAX_FILENAME] = {0};
+    if (config.prefix[0]) {
+        snprintf(base_with_prefix, MAX_FILENAME, "%s%s", config.prefix, base);
+    } else {
+        strncpy(base_with_prefix, base, MAX_FILENAME);
+    }
+
+    generate_unique_filename(base_with_prefix, ext, filename);
 
     FILE *file = fopen(filename, "wb");
     if (file) {
@@ -123,7 +177,6 @@ void save_to_file(const wchar_t *content_w, const char *ext) {
 
     free(content_utf8);
 }
-
 
 bool is_h_file(const char *text) {
     bool has_ifndef = strstr(text, "#ifndef") != NULL;
@@ -199,6 +252,7 @@ void load_config(AppConfig *config) {
     config->clear_clipboard_after_save = GetPrivateProfileIntA("General", "clear_clipboard_after_save", 1, CONFIG_FILE);
     config->poll_interval_ms = GetPrivateProfileIntA("General", "poll_interval_ms", 2000, CONFIG_FILE);
     config->autostart = GetPrivateProfileIntA("General", "autostart", 0, CONFIG_FILE);
+    config->prefix[0] = '\0'; // по умолчанию префикс отсутствует
 }
 
 void enable_autostart_if_needed(const AppConfig *config) {
@@ -231,6 +285,7 @@ int main() {
     wchar_t *last_text = NULL;
 
     printf("🚀 Программа запущена.\nНажимайте \"Копировать\" в ChatGPT или редакторе...\nВведите \"stop\" и нажмите Enter для выхода.\n");
+    printf("Для помощи введите команду: help\n");
 
     uintptr_t thread_handle = _beginthreadex(NULL, 0, input_thread_func, NULL, 0, NULL);
 
