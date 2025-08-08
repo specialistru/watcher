@@ -89,8 +89,10 @@ void generate_unique_filename(const char *base, const char *ext, char *out)
 
     if (prefix_enabled)
     {
+        // Проверяем, умещается ли вся строка с prefix+base+ext
         if (prefix_len + base_len + 1 + ext_len > MAX_FILENAME - 1)
         {
+            // Вычисляем максимально допустимую длину base
             size_t allowed_base_len = MAX_FILENAME - 1 - prefix_len - 1 - ext_len;
             if (allowed_base_len > 0 && allowed_base_len < base_len)
             {
@@ -135,7 +137,6 @@ void generate_unique_filename(const char *base, const char *ext, char *out)
     while (file_exists(out))
     {
         snprintf(index_str, sizeof(index_str), "_%d", index++);
-        // удаляем size_t out_len = 0;
 
         if (prefix_enabled)
         {
@@ -152,6 +153,7 @@ void generate_unique_filename(const char *base, const char *ext, char *out)
                 }
                 else
                 {
+                    // Здесь формат корректный: 3 %s — prefix, index_str, ext
                     snprintf(out, MAX_FILENAME, "%s%s.%s", prefix, index_str, ext);
                 }
             }
