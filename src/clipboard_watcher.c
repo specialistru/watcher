@@ -78,7 +78,8 @@ void extract_filename_from_text(const char *text, const char *ext, char *out) {
     snprintf(out, MAX_FILENAME, "%s", base);
 }
 
-void generate_unique_filename(const char *base, const char *ext, char *out) {
+void generate_unique_filename(const char *base, const char *ext, char *out)
+{
     int index = 0;
     size_t prefix_len = prefix_enabled ? strlen(prefix) : 0;
     size_t base_len = strlen(base);
@@ -86,72 +87,99 @@ void generate_unique_filename(const char *base, const char *ext, char *out) {
 
     char index_str[12] = {0};
 
-    // Формируем имя без индекса
-    if (prefix_enabled) {
-        // Общая длина без индекса: prefix + base + '.' + ext + '\0'
-        if (prefix_len + base_len + 1 + ext_len > MAX_FILENAME - 1) {
+    if (prefix_enabled)
+    {
+        if (prefix_len + base_len + 1 + ext_len > MAX_FILENAME - 1)
+        {
             size_t allowed_base_len = MAX_FILENAME - 1 - prefix_len - 1 - ext_len;
-            if (allowed_base_len > 0 && allowed_base_len < base_len) {
+            if (allowed_base_len > 0 && allowed_base_len < base_len)
+            {
                 char base_trunc[MAX_FILENAME];
                 strncpy(base_trunc, base, allowed_base_len);
                 base_trunc[allowed_base_len] = '\0';
                 snprintf(out, MAX_FILENAME, "%s%s.%s", prefix, base_trunc, ext);
-            } else {
+            }
+            else
+            {
                 snprintf(out, MAX_FILENAME, "%s.%s", prefix, ext);
             }
-        } else {
+        }
+        else
+        {
             snprintf(out, MAX_FILENAME, "%s%s.%s", prefix, base, ext);
         }
-    } else {
-        // Аналогично без префикса
-        if (base_len + 1 + ext_len > MAX_FILENAME - 1) {
+    }
+    else
+    {
+        if (base_len + 1 + ext_len > MAX_FILENAME - 1)
+        {
             size_t allowed_base_len = MAX_FILENAME - 1 - 1 - ext_len;
-            if (allowed_base_len > 0 && allowed_base_len < base_len) {
+            if (allowed_base_len > 0 && allowed_base_len < base_len)
+            {
                 char base_trunc[MAX_FILENAME];
                 strncpy(base_trunc, base, allowed_base_len);
                 base_trunc[allowed_base_len] = '\0';
                 snprintf(out, MAX_FILENAME, "%s.%s", base_trunc, ext);
-            } else {
+            }
+            else
+            {
                 snprintf(out, MAX_FILENAME, "file.%s", ext);
             }
-        } else {
+        }
+        else
+        {
             snprintf(out, MAX_FILENAME, "%s.%s", base, ext);
         }
     }
 
-    // Цикл для уникализации имени
-    while (file_exists(out)) {
+    while (file_exists(out))
+    {
         snprintf(index_str, sizeof(index_str), "_%d", index++);
-        
-        if (prefix_enabled) {
+        // удаляем size_t out_len = 0;
+
+        if (prefix_enabled)
+        {
             size_t len = prefix_len + base_len + strlen(index_str) + 1 + ext_len;
-            if (len > MAX_FILENAME - 1) {
+            if (len > MAX_FILENAME - 1)
+            {
                 size_t allowed_base_len = MAX_FILENAME - 1 - prefix_len - strlen(index_str) - 1 - ext_len;
-                if (allowed_base_len > 0 && allowed_base_len < base_len) {
+                if (allowed_base_len > 0 && allowed_base_len < base_len)
+                {
                     char base_trunc[MAX_FILENAME];
                     strncpy(base_trunc, base, allowed_base_len);
                     base_trunc[allowed_base_len] = '\0';
                     snprintf(out, MAX_FILENAME, "%s%s%s.%s", prefix, base_trunc, index_str, ext);
-                } else {
-                    // Когда некуда укорачивать base, используем только префикс + индекс + расширение
+                }
+                else
+                {
                     snprintf(out, MAX_FILENAME, "%s%s.%s", prefix, index_str, ext);
                 }
-            } else {
+            }
+            else
+            {
                 snprintf(out, MAX_FILENAME, "%s%s%s.%s", prefix, base, index_str, ext);
             }
-        } else {
+        }
+        else
+        {
             size_t len = base_len + strlen(index_str) + 1 + ext_len;
-            if (len > MAX_FILENAME - 1) {
+            if (len > MAX_FILENAME - 1)
+            {
                 size_t allowed_base_len = MAX_FILENAME - 1 - strlen(index_str) - 1 - ext_len;
-                if (allowed_base_len > 0 && allowed_base_len < base_len) {
+                if (allowed_base_len > 0 && allowed_base_len < base_len)
+                {
                     char base_trunc[MAX_FILENAME];
                     strncpy(base_trunc, base, allowed_base_len);
                     base_trunc[allowed_base_len] = '\0';
                     snprintf(out, MAX_FILENAME, "%s%s.%s", base_trunc, index_str, ext);
-                } else {
+                }
+                else
+                {
                     snprintf(out, MAX_FILENAME, "file%s.%s", index_str, ext);
                 }
-            } else {
+            }
+            else
+            {
                 snprintf(out, MAX_FILENAME, "%s%s.%s", base, index_str, ext);
             }
         }
