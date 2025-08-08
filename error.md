@@ -2,11 +2,11 @@
 	"resource": "/f:/Watcher/clipboard_watcher.c",
 	"owner": "makefile-tools",
 	"severity": 8,
-	"message": "'%s' directive output may be truncated writing up to 65535 bytes into a region of size between 3 and 65536 [-Werror=format-truncation=]",
+	"message": "'%s' directive output may be truncated writing up to 255 bytes into a region of size between 2 and 256 [-Werror=format-truncation=]",
 	"source": "gcc",
-	"startLineNumber": 120,
+	"startLineNumber": 116,
 	"startColumn": 48,
-	"endLineNumber": 120,
+	"endLineNumber": 116,
 	"endColumn": 48
 },{
 	"resource": "/f:/Watcher/clipboard_watcher.c",
@@ -14,82 +14,61 @@
 	"severity": 8,
 	"message": "'snprintf' output may be truncated before the last format character [-Werror=format-truncation=]",
 	"source": "gcc",
-	"startLineNumber": 124,
+	"startLineNumber": 120,
 	"startColumn": 51,
-	"endLineNumber": 124,
+	"endLineNumber": 120,
 	"endColumn": 51
 },{
 	"resource": "/f:/Watcher/clipboard_watcher.c",
 	"owner": "makefile-tools",
 	"severity": 8,
-	"message": "too many arguments for format [-Werror=format-extra-args]",
+	"message": "'%s' directive output may be truncated writing up to 254 bytes into a region of size between 1 and 256 [-Werror=format-truncation=]",
 	"source": "gcc",
-	"startLineNumber": 129,
-	"startColumn": 41,
-	"endLineNumber": 129,
-	"endColumn": 41
+	"startLineNumber": 125,
+	"startColumn": 44,
+	"endLineNumber": 125,
+	"endColumn": 44
 },{
 	"resource": "/f:/Watcher/clipboard_watcher.c",
 	"owner": "makefile-tools",
 	"severity": 8,
-	"message": "'%s' directive output may be truncated writing up to 65533 bytes into a region of size between 0 and 65535 [-Werror=format-truncation=]",
+	"message": "'%s' directive output may be truncated writing up to 253 bytes into a region of size between 0 and 255 [-Werror=format-truncation=]",
 	"source": "gcc",
-	"startLineNumber": 129,
-	"startColumn": 45,
-	"endLineNumber": 129,
-	"endColumn": 45
-},{
-	"resource": "/f:/Watcher/clipboard_watcher.c",
-	"owner": "makefile-tools",
-	"severity": 8,
-	"message": "'%s' directive output may be truncated writing up to 65532 bytes into a region of size between 0 and 65535 [-Werror=format-truncation=]",
-	"source": "gcc",
-	"startLineNumber": 143,
+	"startLineNumber": 138,
 	"startColumn": 49,
-	"endLineNumber": 143,
+	"endLineNumber": 138,
 	"endColumn": 49
 },{
 	"resource": "/f:/Watcher/clipboard_watcher.c",
 	"owner": "makefile-tools",
 	"severity": 8,
-	"message": "'%s' directive output may be truncated writing up to 65533 bytes into a region of size between 2 and 65535 [-Werror=format-truncation=]",
+	"message": "'%s' directive output may be truncated writing up to 254 bytes into a region of size between 1 and 255 [-Werror=format-truncation=]",
 	"source": "gcc",
-	"startLineNumber": 152,
+	"startLineNumber": 147,
 	"startColumn": 45,
-	"endLineNumber": 152,
+	"endLineNumber": 147,
 	"endColumn": 45
 },{
 	"resource": "/f:/Watcher/clipboard_watcher.c",
 	"owner": "makefile-tools",
 	"severity": 8,
-	"message": "unused variable 'out_len' [-Werror=unused-variable]",
+	"message": "'%s' directive output may be truncated writing up to 11 bytes into a region of size between 1 and 256 [-Werror=format-truncation=]",
 	"source": "gcc",
-	"startLineNumber": 160,
-	"startColumn": 16,
-	"endLineNumber": 160,
-	"endColumn": 16
-},{
-	"resource": "/f:/Watcher/clipboard_watcher.c",
-	"owner": "makefile-tools",
-	"severity": 8,
-	"message": "'%s' directive output may be truncated writing up to 11 bytes into a region of size between 1 and 65536 [-Werror=format-truncation=]",
-	"source": "gcc",
-	"startLineNumber": 174,
+	"startLineNumber": 167,
 	"startColumn": 54,
-	"endLineNumber": 174,
+	"endLineNumber": 167,
 	"endColumn": 54
 },{
 	"resource": "/f:/Watcher/clipboard_watcher.c",
 	"owner": "makefile-tools",
 	"severity": 8,
-	"message": "'%s' directive output may be truncated writing up to 11 bytes into a region of size between 1 and 65536 [-Werror=format-truncation=]",
+	"message": "'%s' directive output may be truncated writing up to 11 bytes into a region of size between 1 and 256 [-Werror=format-truncation=]",
 	"source": "gcc",
-	"startLineNumber": 197,
+	"startLineNumber": 190,
 	"startColumn": 52,
-	"endLineNumber": 197,
+	"endLineNumber": 190,
 	"endColumn": 52
 }]
-
 
 
 void generate_unique_filename(const char *base, const char *ext, char *out)
