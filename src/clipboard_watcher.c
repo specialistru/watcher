@@ -84,16 +84,14 @@ void generate_unique_filename(const char *base, const char *ext, char *out) {
     size_t base_len = strlen(base);
     size_t ext_len = strlen(ext);
 
-    // Максимум для целочисленного индекса (до 10 цифр)
     char index_str[12] = {0};
-    
+
+    // Формируем имя без индекса
     if (prefix_enabled) {
-        // Проверяем длину без индекса
-        if (prefix_len + base_len + 1 + ext_len + 1 > MAX_FILENAME - 1) {
-            // Обрезаем base, чтобы вместить в буфер
-            size_t allowed_base_len = MAX_FILENAME - 1 - prefix_len - 1 - ext_len - 1;
+        // Общая длина без индекса: prefix + base + '.' + ext + '\0'
+        if (prefix_len + base_len + 1 + ext_len > MAX_FILENAME - 1) {
+            size_t allowed_base_len = MAX_FILENAME - 1 - prefix_len - 1 - ext_len;
             if (allowed_base_len > 0 && allowed_base_len < base_len) {
-                // Копируем часть base
                 char base_trunc[MAX_FILENAME];
                 strncpy(base_trunc, base, allowed_base_len);
                 base_trunc[allowed_base_len] = '\0';
@@ -105,9 +103,9 @@ void generate_unique_filename(const char *base, const char *ext, char *out) {
             snprintf(out, MAX_FILENAME, "%s%s.%s", prefix, base, ext);
         }
     } else {
-        if (base_len + 1 + ext_len + 1 > MAX_FILENAME - 1) {
-            // Обрезаем base
-            size_t allowed_base_len = MAX_FILENAME - 1 - 1 - ext_len - 1;
+        // Аналогично без префикса
+        if (base_len + 1 + ext_len > MAX_FILENAME - 1) {
+            size_t allowed_base_len = MAX_FILENAME - 1 - 1 - ext_len;
             if (allowed_base_len > 0 && allowed_base_len < base_len) {
                 char base_trunc[MAX_FILENAME];
                 strncpy(base_trunc, base, allowed_base_len);
@@ -121,15 +119,13 @@ void generate_unique_filename(const char *base, const char *ext, char *out) {
         }
     }
 
-    // Проверяем, существует ли файл
+    // Цикл для уникализации имени
     while (file_exists(out)) {
         snprintf(index_str, sizeof(index_str), "_%d", index++);
-        size_t out_len = 0;
-
+        
         if (prefix_enabled) {
             size_t len = prefix_len + base_len + strlen(index_str) + 1 + ext_len;
             if (len > MAX_FILENAME - 1) {
-                // Обрезаем base для вмещения
                 size_t allowed_base_len = MAX_FILENAME - 1 - prefix_len - strlen(index_str) - 1 - ext_len;
                 if (allowed_base_len > 0 && allowed_base_len < base_len) {
                     char base_trunc[MAX_FILENAME];
@@ -137,6 +133,7 @@ void generate_unique_filename(const char *base, const char *ext, char *out) {
                     base_trunc[allowed_base_len] = '\0';
                     snprintf(out, MAX_FILENAME, "%s%s%s.%s", prefix, base_trunc, index_str, ext);
                 } else {
+                    // Когда некуда укорачивать base, используем только префикс + индекс + расширение
                     snprintf(out, MAX_FILENAME, "%s%s.%s", prefix, index_str, ext);
                 }
             } else {
